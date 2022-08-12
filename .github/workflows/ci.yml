@@ -1,0 +1,33 @@
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.channel }}
+        target: ${{ matrix.target }}
+        override: true
+        components: rustfmt
+    - uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all -- --check
+    - run: cargo install cross
+    - run: cross test --target ${{ matrix.target }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [
+          x86_64-unknown-linux-gnu,
+          aarch64-unknown-linux-gnu,
+        ]
+        # Tests using sym/const require nightly
+        channel: [nightly]

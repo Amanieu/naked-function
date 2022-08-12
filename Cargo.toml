@@ -1,0 +1,19 @@
+[package]
+name = "naked-function"
+description = "Proc macro implementation of #[naked]"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/rust-lang/hashbrown"
+keywords = ["naked", "asm"]
+categories = ["embedded", "no-std"]
+readme = "README.md"
+version = "0.1.0"
+edition = "2021"
+authors = ["Amanieu d'Antras <amanieu@gmail.com>"]
+rust-version = "1.59.0"
+
+
+[dependencies]
+cfg-if = "1.0.0"
+naked-function-macro = { version = "=0.1.0", path = "naked-function-macro" }
+
+[workspace]

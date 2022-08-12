@@ -1,0 +1,20 @@
+[package]
+name = "naked-function-macro"
+description = "Proc macro for the naked-function crate"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Amanieu/naked-function"
+keywords = ["naked", "asm"]
+categories = ["embedded", "no-std"]
+readme = "README.md"
+version = "0.1.0"
+edition = "2021"
+authors = ["Amanieu d'Antras <amanieu@gmail.com>"]
+rust-version = "1.59.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.42"
+quote = "1.0.20"
+syn = { version = "1.0.98", features = ["full"] }
