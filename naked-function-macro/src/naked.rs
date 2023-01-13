@@ -63,6 +63,7 @@ impl ToTokens for MetaValue {
 
 struct ParsedAttrs {
     foreign_attrs: Vec<Attribute>,
+    cfg: Vec<Attribute>,
     symbol: Expr,
     link_section: Expr,
 }
@@ -74,6 +75,7 @@ struct ParsedAttrs {
 /// are computed here based on the function attributes.
 fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
     let mut foreign_attrs = vec![];
+    let mut cfg = vec![];
     let mut no_mangle = false;
     let mut export_name = None;
     let mut link_section = None;
@@ -118,6 +120,8 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
         } else if attr.path.is_ident("link_section") {
             let meta: MetaValue = syn::parse2(attr.tokens.clone())?;
             link_section = Some(meta.expr);
+        } else if attr.path.is_ident("cfg") {
+            cfg.push(attr.clone())
         } else {
             bail!(
                 attr,
@@ -177,6 +181,7 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
 
     Ok(ParsedAttrs {
         foreign_attrs,
+        cfg,
         symbol,
         link_section,
     })
@@ -191,7 +196,11 @@ fn emit_foreign_mod(func: &ItemFn, attrs: &ParsedAttrs) -> ItemForeignMod {
         ..func.sig.clone()
     };
     let foreign_fn = ForeignItem::Fn(ForeignItemFn {
-        attrs: attrs.foreign_attrs.clone(),
+        attrs: {
+            let mut attrs_ = attrs.foreign_attrs.clone();
+            attrs_.extend_from_slice(&attrs.cfg[..]);
+            attrs_
+        },
         vis: func.vis.clone(),
         sig,
         semi_token: Default::default(),
@@ -245,7 +254,7 @@ fn emit_global_asm(attrs: &ParsedAttrs, mut asm: Punctuated<AsmOperand, Token![,
         tokens: asm.to_token_stream(),
     };
     ItemMacro {
-        attrs: vec![],
+        attrs: attrs.cfg.clone(),
         ident: None,
         mac: global_asm,
         semi_token: Some(Default::default()),

@@ -84,6 +84,7 @@ mod naked;
 /// - `#[export_name]`
 /// - `#[no_mangle]`
 /// - `#[link_section]`
+/// - `#[cfg]`
 /// - `#[doc]` or `///` doc comments
 #[proc_macro_attribute]
 pub fn naked(attr: TokenStream, item: TokenStream) -> TokenStream {
