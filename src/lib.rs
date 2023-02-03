@@ -1,4 +1,5 @@
 //! This crate provides the [`naked`] proc macro.
+#![no_std]
 
 #[doc(inline)]
 pub use naked_function_macro::naked;
