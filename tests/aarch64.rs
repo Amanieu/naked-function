@@ -1,5 +1,5 @@
 #![cfg(target_arch = "aarch64")]
-#![feature(asm_sym, asm_const)]
+#![feature(asm_const)]
 
 #[naked_function::naked]
 pub unsafe extern "C" fn add(a: i32, b: i32) -> i32 {
