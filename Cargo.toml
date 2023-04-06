@@ -2,7 +2,7 @@
 name = "naked-function"
 description = "Proc macro implementation of #[naked]"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/rust-lang/hashbrown"
+repository = "https://github.com/Amanieu/naked-function"
 keywords = ["naked", "asm"]
 categories = ["embedded", "no-std"]
 readme = "README.md"
