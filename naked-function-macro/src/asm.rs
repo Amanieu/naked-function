@@ -141,18 +141,19 @@ pub fn extract_asm(func: &ItemFn) -> Result<Punctuated<AsmOperand, Token![,]>> {
             "naked functions may only contain a single asm! statement"
         );
     }
-    let macro_ = match &func.block.stmts[0] {
-        Stmt::Macro(macro_) => macro_,
+    let (mac, attrs) = match &func.block.stmts[0] {
+        Stmt::Macro(macro_) => (&macro_.mac, &macro_.attrs),
+        Stmt::Expr(Expr::Macro(macro_), _) => (&macro_.mac, &macro_.attrs),
         _ => bail!(
             func,
             "naked functions may only contain a single asm! statement"
         ),
     };
-    if !macro_.attrs.is_empty() || !macro_.mac.path.is_ident("asm") {
+    if !attrs.is_empty() || !mac.path.is_ident("asm") {
         bail!(
             func,
             "naked functions may only contain a single asm! statement"
         );
     }
-    macro_.mac.parse_body_with(Punctuated::parse_terminated)
+    mac.parse_body_with(Punctuated::parse_terminated)
 }

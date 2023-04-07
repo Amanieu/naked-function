@@ -18,7 +18,7 @@ pub unsafe extern "C" fn add_5(a: i32) -> i32 {
         "add w0, w0, {}",
         "ret",
         const 5,
-    );
+    )
 }
 
 #[test]
