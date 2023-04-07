@@ -90,10 +90,11 @@ mod naked;
 pub fn naked(attr: TokenStream, item: TokenStream) -> TokenStream {
     parse_macro_input!(attr as Nothing);
     match naked::naked_attribute(&parse_macro_input!(item)) {
-        Ok((foreign_mod, global_asm)) => {
+        Ok(items) => {
             let mut tokens = TokenStream2::new();
-            foreign_mod.to_tokens(&mut tokens);
-            global_asm.to_tokens(&mut tokens);
+            for item in &items {
+                item.to_tokens(&mut tokens);
+            }
             tokens.into()
         }
         Err(e) => e.to_compile_error().into(),

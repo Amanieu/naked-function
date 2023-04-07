@@ -44,7 +44,7 @@ impl Parse for AsmOperand {
             let token = input.parse::<kw::options>()?;
             let content;
             let paren_token = parenthesized!(content in input);
-            let options = content.parse_terminated(Ident::parse)?;
+            let options = content.parse_terminated(Ident::parse, Token![,])?;
             return Ok(Self::Options {
                 token,
                 paren_token,
@@ -142,7 +142,7 @@ pub fn extract_asm(func: &ItemFn) -> Result<Punctuated<AsmOperand, Token![,]>> {
         );
     }
     let macro_ = match &func.block.stmts[0] {
-        Stmt::Expr(Expr::Macro(macro_)) | Stmt::Semi(Expr::Macro(macro_), _) => macro_,
+        Stmt::Macro(macro_) => macro_,
         _ => bail!(
             func,
             "naked functions may only contain a single asm! statement"

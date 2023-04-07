@@ -1,10 +1,9 @@
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::{Ident, Span};
 use quote::{quote, ToTokens};
 use syn::{
-    parse::{Nothing, Parse, ParseStream},
-    punctuated::Punctuated,
-    Abi, AttrStyle, Attribute, Expr, ExprLit, ExprMacro, ForeignItem, ForeignItemFn, ItemFn,
-    ItemForeignMod, ItemMacro, Lit, LitStr, Macro, MacroDelimiter, Result, Signature, Token,
+    punctuated::Punctuated, Abi, AttrStyle, Attribute, Expr, ExprLit, ExprMacro, ForeignItem,
+    ForeignItemFn, Item, ItemFn, ItemForeignMod, ItemMacro, Lit, LitStr, Macro, MacroDelimiter,
+    Meta, MetaNameValue, Result, Signature, Token,
 };
 
 use crate::asm::{extract_asm, AsmOperand};
@@ -37,28 +36,6 @@ fn validate_sig(sig: &Signature) -> Result<()> {
         );
     }
     Ok(())
-}
-
-/// Custom implementation of `Meta::NameValue` which accepts an `Expr` instead
-/// of a `LitStr`.
-struct MetaValue {
-    token: Token![=],
-    expr: Expr,
-}
-
-impl Parse for MetaValue {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let token = input.parse()?;
-        let expr = input.parse()?;
-        Ok(Self { token, expr })
-    }
-}
-
-impl ToTokens for MetaValue {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.token.to_tokens(tokens);
-        self.expr.to_tokens(tokens);
-    }
 }
 
 struct ParsedAttrs {
@@ -99,35 +76,38 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
 
         // Forward whitelisted attributes to the foreign item.
         for whitelist in attr_whitelist {
-            if attr.path.is_ident(whitelist) {
+            if attr.path().is_ident(whitelist) {
                 foreign_attrs.push(attr.clone());
                 continue 'outer;
             }
         }
 
         if attr
-            .path
+            .path()
             .segments
             .first()
             .map_or(false, |segment| segment.ident == "rustfmt")
         {
             // Ignore rustfmt attributes
-        } else if attr.path.is_ident("no_mangle") {
-            syn::parse2::<Nothing>(attr.tokens.clone())?;
+        } else if attr.path().is_ident("no_mangle") {
+            attr.meta.require_path_only()?;
             no_mangle = true;
-        } else if attr.path.is_ident("export_name") {
+        } else if attr.path().is_ident("export_name") {
             // Pass the export_name attribute through as a #[link_section] on
             // the foreign import declaration.
-            let meta: MetaValue = syn::parse2(attr.tokens.clone())?;
-            export_name = Some(meta.expr);
-            foreign_attrs.push(Attribute {
+            let name_value = attr.meta.require_name_value()?;
+            export_name = Some(name_value.value.clone());
+            let mut link_name = attr.clone();
+            link_name.meta = Meta::NameValue(MetaNameValue {
                 path: syn::parse2(quote!(link_name)).unwrap(),
-                ..attr.clone()
+                eq_token: name_value.eq_token,
+                value: name_value.value.clone(),
             });
-        } else if attr.path.is_ident("link_section") {
-            let meta: MetaValue = syn::parse2(attr.tokens.clone())?;
-            link_section = Some(meta.expr);
-        } else if attr.path.is_ident("cfg") {
+            foreign_attrs.push(link_name);
+        } else if attr.path().is_ident("link_section") {
+            let name_value = attr.meta.require_name_value()?;
+            link_section = Some(name_value.value.clone());
+        } else if attr.path().is_ident("cfg") {
             cfg.push(attr.clone())
         } else {
             bail!(
@@ -160,12 +140,11 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
             pound_token: Default::default(),
             style: AttrStyle::Outer,
             bracket_token: Default::default(),
-            path: syn::parse2(quote!(link_name)).unwrap(),
-            tokens: MetaValue {
-                token: Default::default(),
-                expr: symbol.clone(),
-            }
-            .into_token_stream(),
+            meta: Meta::NameValue(MetaNameValue {
+                path: syn::parse2(quote!(link_name)).unwrap(),
+                eq_token: Default::default(),
+                value: symbol.clone(),
+            }),
         });
     }
 
@@ -214,6 +193,7 @@ fn emit_foreign_mod(func: &ItemFn, attrs: &ParsedAttrs) -> ItemForeignMod {
     });
     ItemForeignMod {
         attrs: vec![],
+        unsafety: None,
         abi: func.sig.abi.clone().unwrap(),
         brace_token: Default::default(),
         items: vec![foreign_fn],
@@ -269,11 +249,11 @@ fn emit_global_asm(attrs: &ParsedAttrs, mut asm: Punctuated<AsmOperand, Token![,
 }
 
 /// Entry point of the proc macro.
-pub fn naked_attribute(func: &ItemFn) -> Result<(ItemForeignMod, ItemMacro)> {
+pub fn naked_attribute(func: &ItemFn) -> Result<Vec<Item>> {
     validate_sig(&func.sig)?;
     let attrs = parse_attrs(&func.sig.ident, &func.attrs)?;
     let asm = extract_asm(func)?;
     let foreign_mod = emit_foreign_mod(func, &attrs);
     let global_asm = emit_global_asm(&attrs, asm);
-    Ok((foreign_mod, global_asm))
+    Ok(vec![Item::ForeignMod(foreign_mod), Item::Macro(global_asm)])
 }
