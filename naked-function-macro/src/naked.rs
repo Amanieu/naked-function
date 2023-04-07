@@ -105,7 +105,14 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
             }
         }
 
-        if attr.path.is_ident("no_mangle") {
+        if attr
+            .path
+            .segments
+            .first()
+            .map_or(false, |segment| segment.ident == "rustfmt")
+        {
+            // Ignore rustfmt attributes
+        } else if attr.path.is_ident("no_mangle") {
             syn::parse2::<Nothing>(attr.tokens.clone())?;
             no_mangle = true;
         } else if attr.path.is_ident("export_name") {
