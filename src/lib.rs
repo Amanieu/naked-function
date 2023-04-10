@@ -98,7 +98,7 @@ cfg_if::cfg_if! {
         #[cfg(target_arch = "arm")]
         #[doc(hidden)]
         #[macro_export]
-        macro_rules! __asm_function_type {
+        macro_rules! __asm_type {
             ($ty:literal) => { concat!("%", $ty) }
         }
         #[doc(hidden)]
