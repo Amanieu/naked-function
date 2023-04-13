@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
     punctuated::Punctuated, Abi, AttrStyle, Attribute, Expr, ExprLit, ExprMacro, ForeignItem,
@@ -43,6 +43,7 @@ struct ParsedAttrs {
     cfg: Vec<Attribute>,
     symbol: Expr,
     link_section: Expr,
+    instruction_set: Option<TokenStream>,
 }
 
 /// Parses the attributes on the function and checks them against a whitelist
@@ -56,6 +57,7 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
     let mut no_mangle = false;
     let mut export_name = None;
     let mut link_section = None;
+    let mut instruction_set = None;
 
     // Attributes to forward to the foreign function declaration that we will
     // generate.
@@ -109,6 +111,8 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
             link_section = Some(name_value.value.clone());
         } else if attr.path().is_ident("cfg") {
             cfg.push(attr.clone())
+        } else if attr.path().is_ident("instruction_set") {
+            instruction_set = Some(attr.meta.require_list()?.tokens.clone());
         } else {
             bail!(
                 attr,
@@ -170,6 +174,7 @@ fn parse_attrs(ident: &Ident, attrs: &[Attribute]) -> Result<ParsedAttrs> {
         cfg,
         symbol,
         link_section,
+        instruction_set,
     })
 }
 
@@ -203,18 +208,13 @@ fn emit_foreign_mod(func: &ItemFn, attrs: &ParsedAttrs) -> ItemForeignMod {
 fn emit_global_asm(attrs: &ParsedAttrs, mut asm: Punctuated<AsmOperand, Token![,]>) -> ItemMacro {
     // Inject a prefix to the assembly code containing the necessary assembler
     // directives to start a function.
-    let mut prefix_args = Punctuated::<Expr, Token![,]>::new();
-    prefix_args.push(attrs.symbol.clone());
-    prefix_args.push(attrs.link_section.clone());
-    let prefix = Expr::Macro(ExprMacro {
-        attrs: vec![],
-        mac: Macro {
-            path: syn::parse2(quote!(::naked_function::__asm_function_begin)).unwrap(),
-            bang_token: Default::default(),
-            delimiter: MacroDelimiter::Paren(Default::default()),
-            tokens: prefix_args.into_token_stream(),
-        },
-    });
+    let symbol = &attrs.symbol;
+    let link_section = &attrs.link_section;
+    let instruction_set = &attrs.instruction_set;
+    let prefix = syn::parse2(quote! {
+        ::naked_function::__asm_function_begin!(#symbol, #link_section, (#instruction_set))
+    })
+    .unwrap();
     asm.insert(0, AsmOperand::Template(prefix));
 
     // Inject a suffix at the end of the assembly code containing assembler
@@ -223,15 +223,10 @@ fn emit_global_asm(attrs: &ParsedAttrs, mut asm: Punctuated<AsmOperand, Token![,
         .iter()
         .rposition(|op| matches!(op, AsmOperand::Template(_)))
         .unwrap();
-    let suffix = Expr::Macro(ExprMacro {
-        attrs: vec![],
-        mac: Macro {
-            path: syn::parse2(quote!(::naked_function::__asm_function_end)).unwrap(),
-            bang_token: Default::default(),
-            delimiter: MacroDelimiter::Paren(Default::default()),
-            tokens: attrs.symbol.to_token_stream(),
-        },
-    });
+    let suffix = syn::parse2(quote! {
+        ::naked_function::__asm_function_end!(#symbol)
+    })
+    .unwrap();
     asm.insert(last_template + 1, AsmOperand::Template(suffix));
 
     let global_asm = Macro {

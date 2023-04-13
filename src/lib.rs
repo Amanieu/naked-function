@@ -11,6 +11,49 @@ pub use naked_function_macro::naked;
 // target cfgs to proc macros.
 
 cfg_if::cfg_if! {
+    if #[cfg(all(target_arch = "arm", is_thumb))] {
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! __asm_arch_prefix {
+            () => { ".thumb\n.thumb_func" };
+            (arm::a32) => { ".arm" };
+            (arm::t32) => { ".thumb\n.thumb_func" };
+            ($isa:path) => { compile_error!("invalid instruction set") };
+        }
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! __asm_arch_suffix {
+            () => { ".thumb" };
+        }
+    } else if #[cfg(all(target_arch = "arm", not(is_thumb)))] {
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! __asm_arch_prefix {
+            () => { ".arm" };
+            (arm::a32) => { ".arm" };
+            (arm::t32) => { ".thumb\n.thumb_func" };
+            ($isa:path) => { compile_error!("invalid instruction set") };
+        }
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! __asm_arch_suffix {
+            () => { ".arm" };
+        }
+    } else {
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! __asm_arch_prefix {
+            () => { "" };
+            ($isa:path) => { compile_error!("invalid instruction set") };
+        }
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! __asm_arch_suffix {
+            () => { "" };
+        }
+    }
+}
+cfg_if::cfg_if! {
     if #[cfg(any(
             target_vendor = "apple",
             all(windows, target_arch = "x86"),
@@ -34,7 +77,7 @@ cfg_if::cfg_if! {
         #[doc(hidden)]
         #[macro_export]
         macro_rules! __asm_function_begin {
-            ($symbol:expr, $section:expr) => {
+            ($symbol:expr, $section:expr, ($($instruction_set:tt)*)) => {
                 concat!(
                     ".pushsection ", $section, ",\"xr\"\n",
                     ".balign 4\n",
@@ -43,6 +86,7 @@ cfg_if::cfg_if! {
                     ".scl 2\n",
                     ".type 32\n",
                     ".endef ", $crate::__asm_mangle!($symbol), "\n",
+                    $crate::__asm_arch_prefix!($($instruction_set)*), "\n",
                     $crate::__asm_mangle!($symbol), ":\n",
                 )
             };
@@ -51,7 +95,10 @@ cfg_if::cfg_if! {
         #[macro_export]
         macro_rules! __asm_function_end {
             ($symbol:expr) => {
-                ".popsection"
+                concat!(
+                    ".popsection\n",
+                    $crate::__asm_arch_suffix!(), "\n",
+                )
             };
         }
         #[doc(hidden)]
@@ -64,12 +111,13 @@ cfg_if::cfg_if! {
         #[doc(hidden)]
         #[macro_export]
         macro_rules! __asm_function_begin {
-            ($symbol:expr, $section:expr) => {
+            ($symbol:expr, $section:expr, ($($instruction_set:tt)*)) => {
                 concat!(
                     ".pushsection ", $section, ",regular,pure_instructions\n",
                     ".balign 4\n",
                     ".globl ", $crate::__asm_mangle!($symbol), "\n",
                     ".private_extern ", $crate::__asm_mangle!($symbol), "\n",
+                    $crate::__asm_arch_prefix!($($instruction_set)*), "\n",
                     $crate::__asm_mangle!($symbol), ":\n",
                 )
             };
@@ -78,7 +126,10 @@ cfg_if::cfg_if! {
         #[macro_export]
         macro_rules! __asm_function_end {
             ($symbol:expr) => {
-                ".popsection"
+                concat!(
+                    ".popsection\n",
+                    $crate::__asm_arch_suffix!(), "\n",
+                )
             };
         }
         #[doc(hidden)]
@@ -104,13 +155,14 @@ cfg_if::cfg_if! {
         #[doc(hidden)]
         #[macro_export]
         macro_rules! __asm_function_begin {
-            ($symbol:expr, $section:expr) => {
+            ($symbol:expr, $section:expr, ($($instruction_set:tt)*)) => {
                 concat!(
                     ".pushsection ", $section, ",\"ax\", ", $crate::__asm_type!("progbits"), "\n",
                     ".balign 4\n",
                     ".globl ", $crate::__asm_mangle!($symbol), "\n",
                     ".hidden ", $crate::__asm_mangle!($symbol), "\n",
                     ".type ", $crate::__asm_mangle!($symbol), ", ", $crate::__asm_type!("function"), "\n",
+                    $crate::__asm_arch_prefix!($($instruction_set)*), "\n",
                     $crate::__asm_mangle!($symbol), ":\n",
                 )
             };
@@ -121,7 +173,8 @@ cfg_if::cfg_if! {
             ($symbol:expr) => {
                 concat!(
                     ".size ", $crate::__asm_mangle!($symbol), ", . - ", $crate::__asm_mangle!($symbol), "\n",
-                    ".popsection"
+                    ".popsection\n",
+                    $crate::__asm_arch_suffix!(), "\n",
                 )
             };
         }
