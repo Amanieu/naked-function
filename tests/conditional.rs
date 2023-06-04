@@ -19,9 +19,11 @@ pub unsafe extern "C" fn ret() -> i32 {
 fn test_conditional() {
     let x = unsafe { ret() };
 
-    if cfg!(x86_64) {
-        debug_assert_eq!(x, 1);
-    } else if cfg!(aarch64) {
-        debug_assert_eq!(x, 2);
+    if cfg!(target_arch = "x86_64") {
+        assert_eq!(x, 1);
+    } else if cfg!(target_arch = "aarch64") {
+        assert_eq!(x, 2);
+    } else {
+        panic!();
     }
 }
